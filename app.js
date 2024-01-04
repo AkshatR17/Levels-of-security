@@ -4,6 +4,7 @@ const express = require('express');
 const ejs = require('ejs');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const encrypt = require('mongoose-encryption');
 
 const app = express();
 
@@ -15,10 +16,13 @@ app.use(bodyParser.urlencoded({
 
 mongoose.connect('mongodb+srv://admin:H8gVgrtTkTOAT27A@cluster0.zirtemd.mongodb.net/userData');
 
-const userSchema = mongoose.Schema({
+const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
+
+const secret = "ThisIsLevel2OfAuthentication.";
+userSchema.plugin(encrypt, {secret, encryptedFields: ['password']});
 
 const user = mongoose.model('userData', userSchema);
 
