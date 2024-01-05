@@ -16,6 +16,9 @@ const passportLocalMongoose = require('passport-local-mongoose');
 // we don't need to require passport local as passport local mongoose will explicitly require it.
 const flash = require('connect-flash');
 // used for sending message of wrong inputs
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
+
 const app = express();
 
 app.use(express.static('public'));
@@ -39,23 +42,63 @@ mongoose.connect(process.env.CLUSTER);
 
 const userSchema = new mongoose.Schema({
     email: String,
-    password: String
+    password: String,
+    googleId: String
 });
 
 userSchema.plugin(passportLocalMongoose);
 // its gonna hash and salt passwords in database
+userSchema.plugin(findOrCreate);
+// google oauth proccess
 
 const user = mongoose.model('userData', userSchema);
 
 passport.use(user.createStrategy());
 
-passport.serializeUser(user.serializeUser());
-passport.deserializeUser(user.deserializeUser());
+passport.serializeUser(function (user, cb) {
+    process.nextTick(function () {
+        return cb(null, {
+            id: user.id,
+            username: user.username,
+            picture: user.picture
+        });
+    });
+});
+
+passport.deserializeUser(function (user, cb) {
+    process.nextTick(function () {
+        return cb(null, user);
+    });
+});
+
+
+// google oauth
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+},
+    function (accessToken, refreshToken, profile, cb) {
+        user.findOrCreate({ googleId: profile.id }, function (err, user) {
+            return cb(err, user);
+        });
+    }
+));
+
 
 // if user is authenticated he should directly land on secrets page like twitter 
-app.get('/',(req,res)=>{
+app.get('/', (req, res) => {
     res.redirect('/secrets');
 });
+
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
+
+app.get('/auth/google/secrets', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
+    res.redirect('/secrets');
+});
+
+// In above both routes we have used middlewares.
 
 app.get('/home', (req, res) => {
     res.render('home');
@@ -65,24 +108,24 @@ app.get('/register', (req, res) => {
     res.render('register');
 });
 
-app.get('/secrets', (req,res)=>{
+app.get('/secrets', (req, res) => {
     // we will check if the user is authenticated or not
     if (req.isAuthenticated()) {
         res.render('secrets');
     }
-    else{
+    else {
         res.redirect('/home');
     }
 });
 
 app.post('/register', (req, res) => {
 
-    user.register({username: req.body.username}, req.body.password, (err, user)=>{
+    user.register({ username: req.body.username }, req.body.password, (err, user) => {
         if (err) {
             console.log(err);
             res.redirect('/register')
-        }else{
-            passport.authenticate('local')(req, res, ()=>{
+        } else {
+            passport.authenticate('local')(req, res, () => {
                 res.redirect('/secrets');
                 // notice we are redirecting instead of rendering as now once user is authenticated we know that he can access the page uninterruptedly.
             });
