@@ -14,7 +14,8 @@ const session = require('express-session');
 const passport = require('passport');
 const passportLocalMongoose = require('passport-local-mongoose');
 // we don't need to require passport local as passport local mongoose will explicitly require it.
-
+const flash = require('connect-flash');
+// used for sending message of wrong inputs
 const app = express();
 
 app.use(express.static('public'));
@@ -32,6 +33,7 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+app.use(flash());
 
 mongoose.connect(process.env.CLUSTER);
 
@@ -57,10 +59,6 @@ app.get('/',(req,res)=>{
 
 app.get('/home', (req, res) => {
     res.render('home');
-});
-
-app.get('/login', (req, res) => {
-    res.render('login');
 });
 
 app.get('/register', (req, res) => {
@@ -92,24 +90,14 @@ app.post('/register', (req, res) => {
     });
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', passport.authenticate('local', {
+    successRedirect: '/secrets',
+    failureRedirect: '/login',
+    failureFlash: true
+}));
 
-    const userL = new user({
-        username: req.body.username,
-        passord: req.body.password
-    });
-
-    req.logIn(userL, (err)=>{
-        if (err) {
-            console.log(err);
-        }
-        else{
-            passport.authenticate('local')(req,res,()=>{
-                res.redirect('/secrets');
-            });
-        }
-    });
-
+app.get('/login', (req, res) => {
+    res.render('login', { message: req.flash('error') });
 });
 
 app.get('/logout', (req, res) => {
