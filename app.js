@@ -43,7 +43,8 @@ mongoose.connect(process.env.CLUSTER);
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String
+    googleId: String,
+    secret: String
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -89,7 +90,7 @@ passport.use(new GoogleStrategy({
 
 // if user is authenticated he should directly land on secrets page like twitter 
 app.get('/', (req, res) => {
-    res.redirect('/secrets');
+    res.redirect('/home');
 });
 
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }));
@@ -108,14 +109,49 @@ app.get('/register', (req, res) => {
     res.render('register');
 });
 
-app.get('/secrets', (req, res) => {
-    // we will check if the user is authenticated or not
+app.get('/secrets', async (req, res) => {
+    try {
+        // Check if the user is authenticated or not
+        const foundUsers = await user.find({'secret': { $ne: null }}).exec();
+
+        if (foundUsers) {
+            res.render('secrets', { usersWithSecrets: foundUsers });
+        }
+    } catch (err) {
+        console.log(err);
+        // Handle errors appropriately
+    }
+});
+
+
+app.get('/submit', (req, res) => {
+
     if (req.isAuthenticated()) {
-        res.render('secrets');
+        res.render('submit');
     }
     else {
-        res.redirect('/home');
+        res.redirect('/login');
     }
+});
+
+app.post('/submit',async (req, res) => {
+
+    const submittedSecret = req.body.secret;
+
+    // console.log(submittedSecret);
+    // console.log(req.user);
+    try {
+        const foundUser = await user.findById(req.user.id);
+
+        if (foundUser) {
+            foundUser.secret = submittedSecret;
+            await foundUser.save();
+            res.redirect('/secrets');
+        }
+    } catch (err) {
+        console.log(err);
+    }
+
 });
 
 app.post('/register', (req, res) => {
